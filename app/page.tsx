@@ -1,65 +1,263 @@
-import Image from "next/image";
+'use client'; // This line is required for React hooks (useState, useEffect)
 
-export default function Home() {
+import React, { useState, useEffect, useMemo } from 'react';
+
+// Define the structure of a single rate object, just as it is in your database
+interface Rate {
+  id: number;
+  bankName: string;
+  fdType: string;
+  termMonths: number;
+  payoutSchedule: string;
+  interestRate: number;
+  aer: number | null;
+}
+
+// A small, reusable component for the loading spinner
+function LoadingSpinner() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="flex justify-center items-center py-10">
+      <div className="w-12 h-12 border-4 border-t-blue-500 border-gray-200 rounded-full animate-spin"></div>
+    </div>
+  );
+}
+
+// This is the main function for your page
+export default function RateAggregatorPage() {
+  // --- State Variables ---
+  const [rates, setRates] = useState<Rate[]>([]); // Holds all 366+ rates
+  const [isLoading, setIsLoading] = useState(true); // True when loading data
+  const [error, setError] = useState<string | null>(null); // Holds any error messages
+  
+  // --- Filter and Sort State ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [minTerm, setMinTerm] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<'interestRate' | 'termMonths'>('interestRate');
+
+  // --- Data Fetching ---
+  // This hook runs once when the component first loads
+  useEffect(() => {
+    async function fetchData() {
+      setIsLoading(true); // Show spinner
+      setError(null);
+      try {
+        // This is the most important line:
+        // It calls YOUR OWN API endpoint to get the data
+        const response = await fetch('/api/rates'); 
+        
+        // --- IMPROVEMENT 1: Check for server errors ---
+        if (!response.ok) {
+          // If the server responded with 404, 500, etc.
+          throw new Error(`Failed to fetch data: Server responded with ${response.status}`);
+        }
+        
+        const data = await response.json();
+
+        // --- IMPROVEMENT 2: Check if data is an array ---
+        // This is the fix for your "rates.filter is not a function" error
+        if (Array.isArray(data)) {
+          setRates(data); // Save the data in our state
+        } else {
+          // This happens if the API sent back an error object like { "error": "..." }
+          throw new Error('Failed to fetch data: API did not return an array.');
+        }
+
+      } catch (err) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError('An unknown error occurred');
+        }
+      } finally {
+        setIsLoading(false); // Hide spinner
+      }
+    }
+    fetchData();
+  }, []); // The empty array [] means "run this only once"
+
+  // --- Filtering and Sorting Logic ---
+  // This re-calculates the list every time a filter changes
+  const filteredAndSortedRates = useMemo(() => {
+    // This code block is now safe because 'rates' is guaranteed to be an array
+    return rates
+      .filter(rate => 
+        // Filter by bank name (case-insensitive)
+        rate.bankName.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .filter(rate => 
+        // Filter by minimum term
+        minTerm === 0 ? true : rate.termMonths >= minTerm
+      )
+      .sort((a, b) => {
+        // Sort by either highest rate or shortest term
+        if (sortBy === 'interestRate') {
+          return (b.interestRate || 0) - (a.interestRate || 0);
+        }
+        return a.termMonths - b.termMonths;
+      });
+  }, [rates, searchTerm, minTerm, sortBy]); // Dependencies: re-run when these change
+
+  // --- JSX (The HTML part) ---
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-4 sm:p-8">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header Section */}
+        <header className="mb-8">
+          <h1 className="text-4xl font-bold text-white text-center mb-2">
+            FD Rate Aggregator
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg text-gray-400 text-center">
+            Your daily updated guide to Fixed Deposit rates in Sri Lanka.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        </header>
+
+        {/* Filter Controls Section */}
+        <div className="mb-6 p-4 bg-gray-800 rounded-lg shadow-md flex flex-col sm:flex-row gap-4">
+          {/* Search by Bank */}
+          <div className="flex-1">
+            <label htmlFor="search" className="block text-sm font-medium text-gray-300 mb-1">
+              Search by Bank
+            </label>
+            <input
+              type="text"
+              id="search"
+              placeholder="E.g., Alliance Finance, HNB..."
+              className="w-full p-3 bg-gray-700 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+          
+          {/* Filter by Term */}
+          <div className="flex-1 sm:flex-none">
+            <label htmlFor="term" className="block text-sm font-medium text-gray-300 mb-1">
+              Minimum Term
+            </label>
+            <select
+              id="term"
+              className="w-full p-3 bg-gray-700 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white appearance-none"
+              value={minTerm}
+              onChange={(e) => setMinTerm(Number(e.target.value))}
+            >
+              <option value={0}>All Terms</option>
+              <option value={3}>3+ Months</option>
+              <option value={6}>6+ Months</option>
+              <option value={12}>12+ Months (1 Year)</option>
+              <option value={24}>24+ Months (2 Years)</option>
+            </select>
+          </div>
+          
+          {/* Sort By */}
+          <div className="flex-1 sm:flex-none">
+            <label htmlFor="sort" className="block text-sm font-medium text-gray-300 mb-1">
+              Sort By
+            </label>
+            <select
+              id="sort"
+              className="w-full p-3 bg-gray-700 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white appearance-none"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'interestRate' | 'termMonths')}
+            >
+              <option value="interestRate">Highest Interest Rate</option>
+              <option value="termMonths">Shortest Term</option>
+            </select>
+          </div>
         </div>
-      </main>
+
+        {/* Data Display Area (Table) */}
+        <main className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          {/* Show spinner while loading */}
+          {isLoading && <LoadingSpinner />}
+          
+          {/* Show error message if something went wrong */}
+          {error && (
+            <div className="p-10 text-center text-red-400">
+              <h3 className="text-xl font-semibold">An Error Occurred</h3>
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {/* Show the table ONLY if loading is finished and there is no error */}
+          {!isLoading && !error && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Bank / Finance Co.
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Term
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Payout
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      FD Type
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Interest Rate (p.a.)
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      AER
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-gray-800 divide-y divide-gray-700">
+                  {/* Show a message if no filters match */}
+                  {filteredAndSortedRates.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                        No results found for your filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    // Loop over the data and create a table row for each rate
+                    filteredAndSortedRates.map((rate, index) => (
+                      <tr key={`${rate.bankName}-${rate.termMonths}-${rate.payoutSchedule}-${index}`} className="hover:bg-gray-700 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-white">{rate.bankName}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-300">{rate.termMonths} Months</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-300">{rate.payoutSchedule}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {/* Special styling for Senior Citizen rates */}
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            rate.fdType.toLowerCase().includes('senior') 
+                              ? 'bg-green-900 text-green-200' 
+                              : 'bg-blue-900 text-blue-200'
+                          }`}>
+                            {rate.fdType}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="text-base font-bold text-green-400">{rate.interestRate.toFixed(2)}%</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <div className="text-sm text-gray-400">{rate.aer ? `${rate.aer.toFixed(2)}%` : '-'}</div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </main>
+        
+        {/* Footer Section */}
+        <footer className="mt-8 text-center text-gray-500 text-sm">
+          <p>
+            Disclaimer: Rates are scraped automatically and are for informational purposes only.
+            Always verify with the financial institution before making a decision.
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }

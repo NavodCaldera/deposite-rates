@@ -47,7 +47,3 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           python scraper/fd_scraper_v2.py
-```eof
-
-4.  Click the **"Commit changes"** button to save this new, clean version.
-5.  Go back to the **"Actions"** tab. After about 30 seconds, refresh the page. Your **"Scrape FD Rates"** workflow should now appear on the left.

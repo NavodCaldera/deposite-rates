@@ -43,7 +43,7 @@ export default function RateAggregatorPage() {
       try {
         // This is the most important line:
         // It calls YOUR OWN API endpoint to get the data
-        const response = await fetch('/api/rates'); 
+        const response = await fetch('/api/rates', { cache: 'no-store' }); 
         
         // --- IMPROVEMENT 1: Check for server errors ---
         if (!response.ok) {

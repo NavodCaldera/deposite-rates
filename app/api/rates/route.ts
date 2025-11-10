@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient'; // Adjust path if needed
 
-// Revalidate the cache (Static Site Generation) or fetch dynamically
-export const revalidate = 60; // Revalidate every 60 seconds
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) { // Added 'Request' type
   try {

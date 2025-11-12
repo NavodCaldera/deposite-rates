@@ -1,35 +1,34 @@
+import { getClient } from '../../../lib/supabaseClient'; // <-- Uses the new 'getClient' function
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient'; // Adjust path if needed
 
+// This line forces Vercel to *never* cache this API.
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) { // Added 'Request' type
+export async function GET(request: Request) {
   try {
-    // Select all data from the 'public-rates' table
+    // 1. Create the Supabase client using our new function
+    const supabase = getClient(); // <-- Uses 'getClient'
+    
+    // 2. Fetch all data from the 'public-rates' table
     const { data, error } = await supabase
-      .from('public-rates')
-      .select('*')
-      .order('bankName', { ascending: true })
-      .order('termMonths', { ascending: true });
+      .from('public-rates') 
+      .select('*') 
+      .order('interestRate', { ascending: false }); 
 
+    // 3. If Supabase gave an error, throw it
     if (error) {
-      // If Supabase throws an error
-      console.error('Supabase error:', error);
-      return NextResponse.json(
-        { message: "Error fetching data from database", error: error.message },
-        { status: 500 }
-      );
+      throw new Error(error.message);
     }
 
-    // Success! Return the data
-    return NextResponse.json({ rates: data }, { status: 200 });
+    // 4. Send the data back as a direct array
+    return NextResponse.json(data);
 
-  } catch (e: any) { // Added 'any' type for the catch block
-    // For any other unexpected errors
-    console.error('Unexpected API error:', e);
-    return NextResponse.json(
-      { message: "An unexpected error occurred", error: e.message },
-      { status: 500 }
-    );
+  } catch (error) {
+    let errorMessage = 'An unknown error occurred';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    // 5. Send an error message if anything went wrong
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

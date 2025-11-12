@@ -1,8 +1,8 @@
-'use client'; // This line is required for React hooks (useState, useEffect)
+'use client'; 
 
 import React, { useState, useEffect, useMemo } from 'react';
 
-// Define the structure of a single rate object, just as it is in your database
+// Define the structure of a single rate object
 interface Rate {
   id: number;
   bankName: string;
@@ -25,9 +25,9 @@ function LoadingSpinner() {
 // This is the main function for your page
 export default function RateAggregatorPage() {
   // --- State Variables ---
-  const [rates, setRates] = useState<Rate[]>([]); // Holds all 366+ rates
-  const [isLoading, setIsLoading] = useState(true); // True when loading data
-  const [error, setError] = useState<string | null>(null); // Holds any error messages
+  const [rates, setRates] = useState<Rate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // --- Filter and Sort State ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,14 +38,12 @@ export default function RateAggregatorPage() {
   // This hook runs once when the component first loads
   useEffect(() => {
     async function fetchData() {
-      setIsLoading(true); // Show spinner
+      setIsLoading(true);
       setError(null);
       try {
-        // This is the most important line:
-        // It calls YOUR OWN API endpoint to get the data
+        // This command forces the browser to *never* use a cached version
         const response = await fetch('/api/rates', { cache: 'no-store' }); 
         
-        // --- IMPROVEMENT 1: Check for server errors ---
         if (!response.ok) {
           // If the server responded with 404, 500, etc.
           throw new Error(`Failed to fetch data: Server responded with ${response.status}`);
@@ -53,12 +51,11 @@ export default function RateAggregatorPage() {
         
         const data = await response.json();
 
-        // --- IMPROVEMENT 2: Check if data is an array ---
         // This is the fix for your "rates.filter is not a function" error
         if (Array.isArray(data)) {
-          setRates(data); // Save the data in our state
+          setRates(data); // Save the array of rates
         } else {
-          // This happens if the API sent back an error object like { "error": "..." }
+          // This happens if the API sent back an error object
           throw new Error('Failed to fetch data: API did not return an array.');
         }
 
@@ -78,24 +75,20 @@ export default function RateAggregatorPage() {
   // --- Filtering and Sorting Logic ---
   // This re-calculates the list every time a filter changes
   const filteredAndSortedRates = useMemo(() => {
-    // This code block is now safe because 'rates' is guaranteed to be an array
     return rates
       .filter(rate => 
-        // Filter by bank name (case-insensitive)
         rate.bankName.toLowerCase().includes(searchTerm.toLowerCase())
       )
       .filter(rate => 
-        // Filter by minimum term
         minTerm === 0 ? true : rate.termMonths >= minTerm
       )
       .sort((a, b) => {
-        // Sort by either highest rate or shortest term
         if (sortBy === 'interestRate') {
           return (b.interestRate || 0) - (a.interestRate || 0);
         }
         return a.termMonths - b.termMonths;
       });
-  }, [rates, searchTerm, minTerm, sortBy]); // Dependencies: re-run when these change
+  }, [rates, searchTerm, minTerm, sortBy]);
 
   // --- JSX (The HTML part) ---
   return (

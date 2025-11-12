@@ -5,10 +5,10 @@ import requests
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 import sys
-import os # <-- Import os
-from supabase import create_client, Client # <-- Import Supabase
+import os 
+from supabase import create_client, Client 
 
-# --- SUPABASE UPLOAD FUNCTION (MODIFIED) ---
+# --- SUPABASE UPLOAD FUNCTION ---
 
 async def update_supabase_for_institution(supabase_client: Client, df: pd.DataFrame, institution_name: str):
     """
@@ -55,14 +55,15 @@ async def update_supabase_for_institution(supabase_client: Client, df: pd.DataFr
     except Exception as e:
         print(f"--- FAILED (Upload): Batch commit failed for '{institution_name}'. Error: {e}", file=sys.stderr)
 
-
+# --- THIS FUNCTION IS UPDATED ---
 def clean_and_rename_df(df):
     """
-    Standardizes the DataFrame before it's uploaded to Firestore.
+    Standardizes the DataFrame before it's uploaded to Supabase.
     """
     df_renamed = df.rename(columns={
         'Bank Name': 'bankName',
         'FD Type': 'fdType',
+        'Institution Type': 'institutionType', # <-- ADDED
         'Term (Months)': 'termMonths',
         'Payout Schedule': 'payoutSchedule',
         'Interest Rate (p.a.)': 'interestRate',
@@ -70,7 +71,7 @@ def clean_and_rename_df(df):
     })
     
     # Ensure all required columns exist, add if missing
-    required_cols = ['bankName', 'fdType', 'termMonths', 'payoutSchedule', 'interestRate', 'aer']
+    required_cols = ['bankName', 'fdType', 'institutionType', 'termMonths', 'payoutSchedule', 'interestRate', 'aer'] # <-- ADDED 'institutionType'
     for col in required_cols:
         if col not in df_renamed.columns:
             df_renamed[col] = None
@@ -119,9 +120,9 @@ def scrape_cargills_bank_fd_rates():
                 if len(cells) != 6: continue
                 term_months = parse_term_to_months(cells[0])
                 if not term_months: continue
-                if rate := clean_rate(cells[1]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(cells[2])})
-                if rate := clean_rate(cells[3]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(cells[4])})
-                if rate := clean_rate(cells[5]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
+                if rate := clean_rate(cells[1]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                if rate := clean_rate(cells[3]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                if rate := clean_rate(cells[5]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
 
         senior_header = soup.find('p', string=re.compile(r'Senior Citizen Fixed Deposits', re.IGNORECASE))
         if senior_header and (senior_table := senior_header.find_next_sibling('table')):
@@ -130,8 +131,8 @@ def scrape_cargills_bank_fd_rates():
                 if len(cells) != 3: continue
                 term_months = parse_term_to_months(cells[0])
                 if not term_months: continue
-                if rate := clean_rate(cells[1]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Senior Citizen', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
-                if rate := clean_rate(cells[2]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Senior Citizen', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
+                if rate := clean_rate(cells[1]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Senior Citizen', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
+                if rate := clean_rate(cells[2]): all_rates_data.append({'Bank Name': 'Cargills Bank', 'FD Type': 'Senior Citizen', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
 
         if not all_rates_data:
             print("--- FAILED: Cargills Bank - No data extracted.")
@@ -179,7 +180,9 @@ async def scrape_commercial_bank_fd_rates():
             term_match = re.search(r'(\d+)\s*Months?', description_raw, re.IGNORECASE)
             payout_schedule = 'Monthly' if 'monthly' in description_raw.lower() else 'Annually' if 'annually' in description_raw.lower() else 'At Maturity'
             data_rows.append({
-                'Bank Name': 'Commercial Bank', 'FD Type': 'Standard',
+                'Bank Name': 'Commercial Bank', 
+                'FD Type': 'Standard',
+                'Institution Type': 'Bank',
                 'Term (Months)': int(term_match.group(1)) if term_match else None,
                 'Payout Schedule': payout_schedule,
                 'Interest Rate (p.a.)': float(cells[1].get_text(strip=True)),
@@ -233,9 +236,13 @@ def scrape_dfcc_fd_rates_final():
                     aer = clean_rate(aer_row_cells[col_index].get_text())
                     if rate is not None:
                         data.append({
-                            'Bank Name': 'DFCC Bank', 'FD Type': 'Standard',
-                            'Term (Months)': term_months, 'Payout Schedule': payout_schedule,
-                            'Interest Rate (p.a.)': rate, 'Annual Effective Rate': aer
+                            'Bank Name': 'DFCC Bank', 
+                            'FD Type': 'Standard',
+                            'Institution Type': 'Bank',
+                            'Term (Months)': term_months, 
+                            'Payout Schedule': payout_schedule,
+                            'Interest Rate (p.a.)': rate, 
+                            'Annual Effective Rate': aer
                         })
         return data
 
@@ -314,7 +321,7 @@ async def scrape_hnb_fd_rates_final():
             aer = clean_rate(cells[-1].get_text())
             for i, schedule in enumerate(headers[1:-1]):
                 if rate := clean_rate(cells[i + 1].get_text()):
-                    all_rates_data.append({'Bank Name': 'Hatton National Bank (HNB)', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': schedule.title(), 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': aer})
+                    all_rates_data.append({'Bank Name': 'Hatton National Bank (HNB)', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': schedule.title(), 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': aer})
     
     if not all_rates_data:
         print("--- FAILED: HNB - No data extracted.")
@@ -354,7 +361,9 @@ def scrape_nsb_fd_rates():
             if interest_rate := clean_rate(cells[2]):
                 effective_rate = clean_rate(cells[5])
                 all_rates.append({
-                    'Bank Name': 'National Savings Bank (NSB)', 'FD Type': 'Standard',
+                    'Bank Name': 'National Savings Bank (NSB)', 
+                    'FD Type': 'Standard',
+                    'Institution Type': 'Bank',
                     'Term (Months)': term_months, 
                     'Payout Schedule': "At Maturity" if "Maturity" in cells[4] else "Monthly",
                     'Interest Rate (p.a.)': interest_rate,
@@ -417,7 +426,7 @@ def scrape_ntb_fd_rates_final():
             for i, cell in enumerate(cells[2:]):
                 rate, aer = parse_rate_and_aer(cell)
                 if rate is not None and i < len(term_months) and term_months[i] is not None:
-                    all_rates_data.append({'Bank Name': 'Nations Trust Bank', 'FD Type': 'Standard', 'Term (Months)': term_months[i], 'Payout Schedule': payout_schedule, 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': aer})
+                    all_rates_data.append({'Bank Name': 'Nations Trust Bank', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months[i], 'Payout Schedule': payout_schedule, 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': aer})
 
         if not all_rates_data:
             print("--- FAILED: NTB - No LKR rate data was extracted.")
@@ -458,7 +467,7 @@ async def scrape_pan_asia_fd_rates_final():
         for i in range(1, len(terms)):
             if not (term_months := parse_term_to_months(terms[i])): continue
             if rate := clean_rate(interest_rates[i]):
-                records.append({'Bank Name': 'Pan Asia Bank', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': payout_schedules[i], 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(aer_rates[i])})
+                records.append({'Bank Name': 'Pan Asia Bank', 'FD Type': 'Standard', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': payout_schedules[i], 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': clean_rate(aer_rates[i])})
         return records
 
     url = 'https://www.pabcbank.com/personal-banking/savings-investments/fixed-deposits/general-fixed-deposits/'
@@ -513,9 +522,9 @@ def scrape_peoples_bank_fd_rates():
             cells = row.find_all('td')
             if len(cells) < 3 or not (term_months := parse_term_to_months(cells[0].get_text(strip=True))): continue
             if maturity_rate := clean_rate(cells[1].get_text()):
-                records.append({'Bank Name': "People's Bank", 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': None})
+                records.append({'Bank Name': "People's Bank", 'FD Type': fd_type, 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': None})
             if monthly_rate := clean_rate(cells[2].get_text()):
-                records.append({'Bank Name': "People's Bank", 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': None})
+                records.append({'Bank Name': "People's Bank", 'FD Type': fd_type, 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': None})
         return records
 
     url = 'https://www.peoplesbank.lk/interest-rates/'
@@ -589,9 +598,9 @@ async def scrape_sampath_fd_rates_final_final():
         maturity_rate, maturity_aer = extract_rate_and_aer(cells[1].get_text(strip=True))
         monthly_rate, monthly_aer = extract_rate_and_aer(cells[2].get_text(strip=True))
         annually_rate, annually_aer = extract_rate_and_aer(cells[3].get_text(strip=True))
-        if maturity_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': maturity_aer})
-        if monthly_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': monthly_aer})
-        if annually_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': annually_rate, 'Annual Effective Rate': annually_aer})
+        if maturity_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': maturity_aer})
+        if monthly_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': monthly_aer})
+        if annually_rate: all_rates_data.append({'Bank Name': 'Sampath Bank', 'FD Type': 'Normal', 'Institution Type': 'Bank', 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': annually_rate, 'Annual Effective Rate': annually_aer})
 
     if not all_rates_data:
         print("--- FAILED: Sampath Bank - No data was extracted from table.")
@@ -629,9 +638,9 @@ def scrape_alliance_finance_fd_rates():
             if len(cells) != 5: continue
             if not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                all_rates_data.append({'Bank Name': 'Alliance Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                all_rates_data.append({'Bank Name': 'Alliance Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                all_rates_data.append({'Bank Name': 'Alliance Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                all_rates_data.append({'Bank Name': 'Alliance Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         if not all_rates_data: return None
         print(f"--- SUCCESS: Alliance Finance extracted {len(all_rates_data)} records.")
         return pd.DataFrame(all_rates_data)
@@ -672,9 +681,9 @@ async def scrape_cdb_finance_fd_rates_final():
         cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
         if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
         if monthly_rate := clean_rate(cells[1]):
-            all_rates_data.append({'Bank Name': 'CDB Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[3])})
+            all_rates_data.append({'Bank Name': 'CDB Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[3])})
         if maturity_rate := clean_rate(cells[2]):
-            all_rates_data.append({'Bank Name': 'CDB Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+            all_rates_data.append({'Bank Name': 'CDB Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
     if not all_rates_data: return None
     print(f"--- SUCCESS: CDB Finance extracted {len(all_rates_data)} records.")
     return pd.DataFrame(all_rates_data)
@@ -704,9 +713,9 @@ def scrape_commercial_credit_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                all_rates_data.append({'Bank Name': 'Commercial Credit', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                all_rates_data.append({'Bank Name': 'Commercial Credit', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                all_rates_data.append({'Bank Name': 'Commercial Credit', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                all_rates_data.append({'Bank Name': 'Commercial Credit', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         if not all_rates_data: return None
         print(f"--- SUCCESS: Commercial Credit extracted {len(all_rates_data)} records.")
         return pd.DataFrame(all_rates_data)
@@ -732,9 +741,9 @@ def scrape_dialog_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if maturity_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Dialog Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Dialog Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if monthly_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Dialog Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Dialog Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.dialogfinance.lk/for-you/fixed-deposits'
     print(f"--- Starting: Dialog Finance ---")
@@ -775,9 +784,9 @@ def scrape_hnb_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all(['th', 'td'])]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'HNB Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'HNB Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'HNB Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'HNB Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.hnbfinance.lk/fixed-deposits/'
     print(f"--- Starting: HNB Finance ---")
@@ -818,9 +827,9 @@ def scrape_janashakthi_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Janashakthi Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Janashakthi Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Janashakthi Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Janashakthi Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.janashakthifinance.lk/services/fixed-deposits/'
     print(f"--- Starting: Janashakthi Finance ---")
@@ -858,11 +867,11 @@ def scrape_lolc_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 7 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if annually_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': annually_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Annually', 'Interest Rate (p.a.)': annually_rate, 'Annual Effective Rate': clean_rate(cells[4])})
             if maturity_rate := clean_rate(cells[5]):
-                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[6])})
+                records.append({'Bank Name': 'LOLC Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[6])})
         return records
     url = 'https://www.lolcfinance.com/rates-and-returns/interest-rates/'
     print(f"--- Starting: LOLC Finance ---")
@@ -900,9 +909,9 @@ def scrape_mbsl_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all(['td', 'th'])]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'MBSL Bank', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'MBSL Bank', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'MBSL Bank', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'MBSL Bank', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.mbslbank.com/en/services/personal-services/deposits/fixed-deposits/'
     print(f"--- Starting: MBSL Bank ---")
@@ -940,9 +949,9 @@ def scrape_mercantile_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Mercantile Investments', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Mercantile Investments', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Mercantile Investments', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Mercantile Investments', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.mi.com.lk/en/products-and-services/main-products/fixed-deposit'
     print(f"--- Starting: Mercantile Investments ---")
@@ -997,7 +1006,7 @@ async def scrape_nation_lanka_fd_rates_final():
         if len(cells) < len(header_cells) or not (term_months := parse_term_to_months(cells[0])): continue
         for i, rate_text in enumerate(cells[1:]):
             if rate := clean_rate(rate_text):
-                all_rates_data.append({'Bank Name': 'Nation Lanka Finance', 'FD Type': 'Non-Senior Citizen', 'Term (Months)': term_months, 'Payout Schedule': payout_schedules[i], 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
+                all_rates_data.append({'Bank Name': 'Nation Lanka Finance', 'FD Type': 'Non-Senior Citizen', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': payout_schedules[i], 'Interest Rate (p.a.)': rate, 'Annual Effective Rate': None})
     if not all_rates_data: return None
     print(f"--- SUCCESS: Nation Lanka Finance extracted {len(all_rates_data)} records.")
     return pd.DataFrame(all_rates_data)
@@ -1027,9 +1036,9 @@ def scrape_plc_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if maturity_rate := clean_rate(cells[1]):
-                all_rates_data.append({'Bank Name': "People's Leasing & Finance", 'FD Type': 'Normal', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                all_rates_data.append({'Bank Name': "People's Leasing & Finance", 'FD Type': 'Normal', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if monthly_rate := clean_rate(cells[3]):
-                all_rates_data.append({'Bank Name': "People's Leasing & Finance", 'FD Type': 'Normal', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                all_rates_data.append({'Bank Name': "People's Leasing & Finance", 'FD Type': 'Normal', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         if not all_rates_data: return None
         print(f"--- SUCCESS: PLC extracted {len(all_rates_data)} records.")
         return pd.DataFrame(all_rates_data)
@@ -1055,9 +1064,9 @@ def scrape_pmf_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'PMF Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'PMF Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'PMF Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'PMF Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://pmf.lk/en/fixed-deposit/'
     print(f"--- Starting: PMF Finance ---")
@@ -1095,9 +1104,9 @@ async def scrape_senkadagala_fd_rates_final():
             cells = [cell.get_text(strip=True) for cell in row.find_all(['td', 'th'])]
             if any('period' in c.lower() for c in cells) or len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Senkadagala Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Senkadagala Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Senkadagala Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Senkadagala Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.senfin.com/personal.html'
     print(f"--- Starting: Senkadagala Finance ---")
@@ -1148,9 +1157,9 @@ def scrape_singer_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                all_rates_data.append({'Bank Name': 'Singer Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                all_rates_data.append({'Bank Name': 'Singer Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                all_rates_data.append({'Bank Name': 'Singer Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                all_rates_data.append({'Bank Name': 'Singer Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         if not all_rates_data: return None
         print(f"--- SUCCESS: Singer Finance extracted {len(all_rates_data)} records.")
         return pd.DataFrame(all_rates_data)
@@ -1176,9 +1185,9 @@ def scrape_siyapatha_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row_div.find_all('div', class_='col')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if maturity_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Siyapatha Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Siyapatha Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if monthly_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Siyapatha Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Siyapatha Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.siyapatha.lk/fixed-deposits/'
     print(f"--- Starting: Siyapatha Finance ---")
@@ -1224,9 +1233,9 @@ def scrape_smb_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                all_rates_data.append({'Bank Name': 'SMB Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                all_rates_data.append({'Bank Name': 'SMB Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                all_rates_data.append({'Bank Name': 'SMB Finance', 'FD Type': 'Standard', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                all_rates_data.append({'Bank Name': 'SMB Finance', 'FD Type': 'Standard', 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         if not all_rates_data: return None
         print(f"--- SUCCESS: SMB Finance extracted {len(all_rates_data)} records.")
         return pd.DataFrame(all_rates_data)
@@ -1257,9 +1266,9 @@ def scrape_vallibel_finance_fd_rates():
             cells = [cell.get_text(strip=True) for cell in row.find_all('td')]
             if len(cells) != 5 or not (term_months := parse_term_to_months(cells[0])): continue
             if monthly_rate := clean_rate(cells[1]):
-                records.append({'Bank Name': 'Vallibel Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
+                records.append({'Bank Name': 'Vallibel Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'Monthly', 'Interest Rate (p.a.)': monthly_rate, 'Annual Effective Rate': clean_rate(cells[2])})
             if maturity_rate := clean_rate(cells[3]):
-                records.append({'Bank Name': 'Vallibel Finance', 'FD Type': fd_type, 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
+                records.append({'Bank Name': 'Vallibel Finance', 'FD Type': fd_type, 'Institution Type': 'Finance Company', 'Term (Months)': term_months, 'Payout Schedule': 'At Maturity', 'Interest Rate (p.a.)': maturity_rate, 'Annual Effective Rate': clean_rate(cells[4])})
         return records
     url = 'https://www.vallibelfinance.com/product/fixed-deposits'
     print(f"--- Starting: Vallibel Finance ---")
@@ -1378,7 +1387,7 @@ async def main():
             
     # --- PART 4: Run all uploads in parallel ---
     if upload_tasks:
-        print(f"\n--- Starting {len(upload_tasks)} Firestore uploads in parallel... ---")
+        print(f"\n--- Starting {len(upload_tasks)} Supabase uploads in parallel... ---")
         await asyncio.gather(*upload_tasks)
     
     print("\n\n--- MASTER SCRIPT FINISHED ---")

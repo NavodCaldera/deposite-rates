@@ -5,8 +5,8 @@ from supabase import create_client, Client
 import pandas as pd
 
 # We will import all your scraper classes here
-from scrapers.cargills import CargillsScraper
-from scrapers.alliance import AllianceScraper
+from .scrapers.cargills import CargillsScraper
+from .scrapers.alliance import AllianceScraper
 # TODO: Add your other 24 scraper classes here
 # from scrapers.hnb import HNBScraper
 # from scrapers.commercial_bank import CommercialBankScraper

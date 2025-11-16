@@ -1,9 +1,9 @@
 import pandas as pd
-import httpx  # <-- CHANGED: Use httpx for async requests
+import httpx 
 import sys 
 from bs4 import BeautifulSoup
-from ..base import BaseScraper
-from ..utils import clean_rate, parse_term_to_months
+from scraper.base import BaseScraper                # <-- Absolute import
+from scraper.utils import clean_rate, parse_term_to_months # <-- Absolute import
 
 class AllianceScraper(BaseScraper):
     """
@@ -16,13 +16,11 @@ class AllianceScraper(BaseScraper):
             url='https://www.alliancefinance.lk/investments/fixed-deposits/'
         )
 
-    # --- THIS FUNCTION IS NOW ASYNC ---
     async def scrape(self) -> pd.DataFrame:
         """
         This is the unique scraping logic for Alliance Finance.
         """
         try:
-            # --- THIS BLOCK IS UPDATED FOR 'httpx' ---
             async with httpx.AsyncClient() as client:
                 response = await client.get(self.url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
                 response.raise_for_status()

@@ -1,20 +1,27 @@
 import asyncio
 import os
-import sys # <-- THIS IS THE FIX
+import sys
 from supabase import create_client, Client
 import pandas as pd
+from datetime import datetime
 
-# We will import all your scraper classes here
-from .scrapers.cargills import CargillsScraper
-from .scrapers.alliance import AllianceScraper
-# TODO: Add your other 24 scraper classes here
-# from scrapers.hnb import HNBScraper
-# from scrapers.commercial_bank import CommercialBankScraper
-# ... etc.
+# --- THIS IS THE FIX ---
+# This block adds the project's root directory (one level up) to the Python path.
+# This allows all "absolute" imports (like 'from scraper.scrapers...') to work.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
+sys.path.insert(0, PROJECT_ROOT)
+# --- END OF FIX ---
 
-# We also need the helper function to clean the data before upload
-# Let's import it from your old file for now
-from fd_scraper_v2 import clean_and_rename_df 
+# --- Imports are now ABSOLUTE from the project root ---
+from scraper.scrapers.cargills import CargillsScraper
+from scraper.scrapers.alliance import AllianceScraper
+# TODO: from scraper.scrapers.hnb import HNBScraper
+# ... add all 26 absolute imports here ...
+
+from scraper.utils import clean_and_rename_df
+from scraper.base import BaseScraper
+
 
 async def run_scraper_orchestrator():
     """
@@ -36,13 +43,10 @@ async def run_scraper_orchestrator():
         return
 
     # 2. This list is your "To-Do" list.
-    # Add all your scrapers to this list.
     scrapers_to_run = [
         CargillsScraper(),
         AllianceScraper(),
-        # TODO: Add your other 24 scrapers here
-        # HNBScraper(),
-        # CommercialBankScraper(),
+        # TODO: Add all 26 of your scraper objects here
     ]
 
     print(f"\n>>> Starting all {len(scrapers_to_run)} scrapers... <<<")
@@ -50,47 +54,19 @@ async def run_scraper_orchestrator():
     # 3. This loop runs each scraper one by one, in isolation.
     all_logs = [s.get_log_data() for s in scrapers_to_run]
     
+    tasks = []
     for i, scraper in enumerate(scrapers_to_run):
-        try:
-            # Run the unique 'scrape' method for this company
-            # We use to_thread because your 'scrape' methods use 'requests', which is synchronous
-            df = await asyncio.to_thread(scraper.scrape)
-            
-            if df.empty:
-                print(f"---! FAILED (Scrape): '{scraper.name}' returned no data.")
-                all_logs[i]['status'] = 'Failed'
-                all_logs[i]['errorMessage'] = 'No data extracted'
-                continue
+        tasks.append(run_single_scraper(supabase_client, scraper, all_logs[i]))
 
-            # 4. If scrape succeeds, update the database
-            
-            # 4a. Clean the DataFrame
-            records = clean_and_rename_df(df).to_dict('records')
-            
-            # 4b. Delete old data
-            await asyncio.to_thread(
-                supabase_client.from_("public-rates").delete().eq("bankName", scraper.name).execute
-            )
-            
-            # 4c. Insert new data
-            await asyncio.to_thread(
-                supabase_client.from_("public-rates").insert(records).execute
-            )
-
-            print(f"---✅ SUCCESS (Scrape): '{scraper.name}' updated {len(records)} records.")
-            all_logs[i]['status'] = 'Success'
-            all_logs[i]['recordsUpdated'] = len(records)
-
-        except Exception as e:
-            # If this one scraper fails, it won't crash the whole script!
-            print(f"---! FAILED (Scrape): '{scraper.name}' threw an error. --- \nError: {e}", file=sys.stderr)
-            all_logs[i]['status'] = 'Failed'
-            all_logs[i]['errorMessage'] = str(e)
+    # Run all scraper tasks in parallel
+    await asyncio.gather(*tasks)
     
-    # 5. Upload all the logs to your dashboard table in one go
+    # 4. Upload all the logs to your dashboard table in one go
     print("\n\n>>> Scraping complete. Uploading logs to dashboard... <<<")
     try:
-        # Use upsert to create or update the log for each scraper
+        for log in all_logs:
+            log['lastRun'] = datetime.now().isoformat()
+
         await asyncio.to_thread(
             supabase_client.from_("scraper_logs").upsert(all_logs, on_conflict="name").execute
         )
@@ -99,6 +75,41 @@ async def run_scraper_orchestrator():
         print(f"---! FAILED (Log Upload): Could not update dashboard. \nError: {e}", file=sys.stderr)
     
     print("\n--- MASTER SCRIPT FINISHED ---")
+
+
+async def run_single_scraper(supabase_client: Client, scraper: BaseScraper, log_entry: dict):
+    """
+    A helper function to run one scraper and handle its success or failure.
+    """
+    try:
+        df = await scraper.scrape()
+        
+        if df.empty:
+            print(f"---! FAILED (Scrape): '{scraper.name}' returned no data.")
+            log_entry['status'] = 'Failed'
+            log_entry['errorMessage'] = 'No data extracted'
+            return
+
+        records = clean_and_rename_df(df).to_dict('records')
+        
+        await asyncio.to_thread(
+            supabase_client.from_("public-rates").delete().eq("bankName", scraper.name).execute
+        )
+        
+        await asyncio.to_thread(
+            supabase_client.from_("public-rates").insert(records).execute
+        )
+
+        print(f"---✅ SUCCESS (Scrape): '{scraper.name}' updated {len(records)} records.")
+        log_entry['status'] = 'Success'
+        log_entry['recordsUpdated'] = len(records)
+        log_entry['errorMessage'] = 'N/A'
+
+    except Exception as e:
+        print(f"---! FAILED (Scrape): '{scraper.name}' threw an error. --- \nError: {e}", file=sys.stderr)
+        log_entry['status'] = 'Failed'
+        log_entry['errorMessage'] = str(e)
+
 
 if __name__ == "__main__":
     asyncio.run(run_scraper_orchestrator())

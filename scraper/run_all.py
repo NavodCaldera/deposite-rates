@@ -8,6 +8,7 @@ from datetime import datetime
 # --- Imports are now simple and relative ---
 from .cargills import CargillsScraper
 from .alliance import AllianceScraper
+from .commercial_bank import CommercialBankScraper
 # TODO: from .hnb import HNBScraper
 # ... add all 26 relative imports here ...
 

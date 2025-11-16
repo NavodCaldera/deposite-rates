@@ -2,8 +2,8 @@ import pandas as pd
 import httpx  # <-- CHANGED: Use httpx for async requests
 import sys 
 from bs4 import BeautifulSoup
-from ..base import BaseScraper                # <-- FIXED: Use '..' to go up one folder
-from ..utils import clean_rate, parse_term_to_months # <-- FIXED: Use '..' to go up one folder
+from scraper.base import BaseScraper
+from scraper.utils import clean_rate, parse_term_to_months
 
 class AllianceScraper(BaseScraper):
     """

@@ -3,8 +3,8 @@ import httpx  # <-- CHANGED: Use httpx for async requests
 import re
 import sys 
 from bs4 import BeautifulSoup
-from scraper.base import BaseScraper
-from scraper.utils import clean_rate, parse_term_to_months
+from ..base import BaseScraper
+from ..utils import clean_rate, parse_term_to_months
 
 class CargillsScraper(BaseScraper):
     """

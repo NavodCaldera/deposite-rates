@@ -39,11 +39,11 @@ jobs:
           # This is a critical step for your async scrapers
           python -m playwright install --with-deps
           
-      # Step 5: Run the scraper script
-      - name: 5. Run the new scraper orchestrator # <-- This name is updated
-        # This is where you inject your secrets into the script
+      # Step 5: Run the new scraper orchestrator
+      - name: 5. Run the scraper as a module
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python scraper/run_all.py # <-- THIS IS THE RECTIFIED LINE
+          # This command runs your script as a module, which fixes the import errors
+          python -m scraper.run_all

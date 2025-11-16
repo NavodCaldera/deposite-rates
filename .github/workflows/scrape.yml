@@ -40,10 +40,10 @@ jobs:
           python -m playwright install --with-deps
           
       # Step 5: Run the scraper script
-      - name: 5. Run the scraper script
+      - name: 5. Run the new scraper orchestrator # <-- This name is updated
         # This is where you inject your secrets into the script
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python scraper/fd_scraper_v2.py
+          python scraper/run_all.py # <-- THIS IS THE RECTIFIED LINE

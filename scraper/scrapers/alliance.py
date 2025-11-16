@@ -1,9 +1,9 @@
 import pandas as pd
-import requests
+import httpx  # <-- CHANGED: Use httpx for async requests
 import sys 
 from bs4 import BeautifulSoup
-from scraper.base import BaseScraper
-from scraper.utils import clean_rate, parse_term_to_months 
+from ..base import BaseScraper                # <-- FIXED: Use '..' to go up one folder
+from ..utils import clean_rate, parse_term_to_months # <-- FIXED: Use '..' to go up one folder
 
 class AllianceScraper(BaseScraper):
     """
@@ -16,13 +16,17 @@ class AllianceScraper(BaseScraper):
             url='https://www.alliancefinance.lk/investments/fixed-deposits/'
         )
 
-    def scrape(self) -> pd.DataFrame:
+    # --- THIS FUNCTION IS NOW ASYNC ---
+    async def scrape(self) -> pd.DataFrame:
         """
         This is the unique scraping logic for Alliance Finance.
         """
         try:
-            response = requests.get(self.url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
-            response.raise_for_status()
+            # --- THIS BLOCK IS UPDATED FOR 'httpx' ---
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
+                response.raise_for_status()
+
             soup = BeautifulSoup(response.content, 'lxml')
             table = soup.find('table', id='tablepress-1')
             
@@ -54,5 +58,3 @@ class AllianceScraper(BaseScraper):
         except Exception as e:
             print(f"--- FAILED: {self.name} scraper threw an error. --- \nError: {e}", file=sys.stderr)
             raise e
-
-            

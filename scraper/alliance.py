@@ -2,13 +2,10 @@ import pandas as pd
 import httpx 
 import sys 
 from bs4 import BeautifulSoup
-from scraper.base import BaseScraper                # <-- Absolute import
-from scraper.utils import clean_rate, parse_term_to_months # <-- Absolute import
+from .base import BaseScraper                # <-- FIXED: Now a simple relative import
+from .utils import clean_rate, parse_term_to_months # <-- FIXED: Now a simple relative import
 
 class AllianceScraper(BaseScraper):
-    """
-    A 'child' scraper for Alliance Finance.
-    """
     def __init__(self):
         super().__init__(
             name="Alliance Finance",
@@ -17,9 +14,6 @@ class AllianceScraper(BaseScraper):
         )
 
     async def scrape(self) -> pd.DataFrame:
-        """
-        This is the unique scraping logic for Alliance Finance.
-        """
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(self.url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)

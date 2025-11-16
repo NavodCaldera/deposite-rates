@@ -5,22 +5,14 @@ from supabase import create_client, Client
 import pandas as pd
 from datetime import datetime
 
-# --- THIS IS THE FIX ---
-# This block adds the project's root directory (one level up) to the Python path.
-# This allows all "absolute" imports (like 'from scraper.scrapers...') to work.
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
-sys.path.insert(0, PROJECT_ROOT)
-# --- END OF FIX ---
+# --- Imports are now simple and relative ---
+from .cargills import CargillsScraper
+from .alliance import AllianceScraper
+# TODO: from .hnb import HNBScraper
+# ... add all 26 relative imports here ...
 
-# --- Imports are now ABSOLUTE from the project root ---
-from scraper.scrapers.cargills import CargillsScraper
-from scraper.scrapers.alliance import AllianceScraper
-# TODO: from scraper.scrapers.hnb import HNBScraper
-# ... add all 26 absolute imports here ...
-
-from scraper.utils import clean_and_rename_df
-from scraper.base import BaseScraper
+from .utils import clean_and_rename_df
+from .base import BaseScraper
 
 
 async def run_scraper_orchestrator():
